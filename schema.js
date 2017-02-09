@@ -1,7 +1,12 @@
-let Schema = require('graph.ql')
+// /et Schema = require('graph.ql')
+let {makeExecutableSchema} = require("graphql-tools")
+
 let db = require("./db.js")
 let {graph} = db 
 // console.log(db)
+
+let { GraphQLScalarType } = require('graphql');
+let { Kind } = require('graphql/language');
 
 var old = `
 
@@ -45,8 +50,7 @@ var old = `
 		user(id: ID!): User
 	}
 `
-
-module.exports = Schema(`
+let shcema = `
 	scalar Date
 
 
@@ -70,7 +74,7 @@ module.exports = Schema(`
 
 	type Article {
 		_id: ID!
-		writer: [Writer]
+		writer: Writer
 		image: [Image]
 		title: String
 		body: String
@@ -87,45 +91,58 @@ module.exports = Schema(`
 
 	type Query {
 		article(id: ID): Article
-		articles(): [Article]
+		articles: [Article]
 		writer(id: ID): Writer
-		featured(): [Article]
-		latest(): [Article]
+		featured: [Article]
+		latest: [Article]
 		events(from: Date = "now"): [Event]
 		event(id: ID): Event
 	}
 
-`, {
-	Date: {
-		serialize(date) {
-			return new Date(date)
+`
+let resolvers = {
+	Date: new GraphQLScalarType({
+		name: 'Date',
+		description: 'Date custom scalar type',
+		parseValue(value) {
+			return new Date(value); // value from the client
 		},
-		parseValue(date) {
-			return new Date(date)
-		}
-	},
+		serialize(value) {
+			return value; // value sent to the client
+		},
+		parseLiteral(ast) {
+			// console.log("ast: ", ast, Kind)
+
+			if (ast.kind === Kind.STRING) {
+				//return parseInt(ast.value, 10); // ast value is always in string format
+				return ast.value
+			}
+			return null;
+		},
+	}),
 	User: {
-		resolveType(user, args) {
-			return null
-		}
 	},
 	Writer: {
-		async articles(writer, args) {
-			let res = await graphGet({ subject: ["writer", writer._id ], predicate: "write" })
+		articles(writer, args, ctx) {
+			// let res = await graphGet({ subject: ["writer", writer._id ], predicate: "write" })
 			// console.log("article", res.map(t => t.object[1]))
 
-			out =  await db.article.find({ _id: { $in: res.map(t => t.object[1]) } })
+			// let out =  await db.article.find({ _id: { $in: res.map(t => t.object[1]) } })
 			// console.log("articsle: ", out)
-			return out
+			return ctx.articleGraph.load(writer._id)
 		}
 	},
 	Article: {
-		async writer(article, args) {
-			let res = await graphGet({ object: ["article", article._id ], predicate: "write" })
-			// console.log("writer", res)
+		writer(article, args, ctx) {
+			//let res = await graphGet({ object: ["article", article._id ], predicate: "write" })
+			
 
-			out = await db.user.find({ _id: { $in: res.map(t => t.subject[1]) } })
-			// console.log("writer: ", out)
+			//console.log("article: ", article)
+
+			//let out = await db.user.find({ _id: { $in: res.map(t => t.subject[1]) } })
+			let out = ctx.userGraph.load(article._id)
+			// console.log("writer: ", out)	
+			
 			return out
 		}
 	},
@@ -133,45 +150,53 @@ module.exports = Schema(`
 
 	},
 	Query: {
-		async article(query, args, context) {
-			// console.log("query: ", query, context)
-			return await db.article.findOne({ _id: args.id })
-			
+		article(query, args, ctx) {
+			// console.log("query: ", arguments)
+			return db.article.findOne({ _id: args.id })
+			// return await ctx.article.load(args.id)
 		},
 
-		async articles(query, args) {
-			return await db.article.find({})
+		articles(query, args, ctx) {
+			return db.article.find({})
+		},
+		writer(query, args) {
+			return db.user.findOne({ _id: args.id })
+		},
+		featured() {
+			return db.article.cfind({ featured: true }).limit(5).exec()
+		},
+		latest() {
+			return db.article.cfind({}).limit(5).exec()
 
 		},
-		async writer(query, args) {
-			return await db.user.findOne({ _id: args.id })
+		event(query, args) {
+			return db.event.find({ _id : args.id })
 		},
-		async featured(query, args) {
-			return await db.article.cfind({ featured: true }).limit(5).exec()
-		},
-		async latest(query, args) {
-			return await db.article.cfind({}).limit(5).exec()
-
-		},
-		async event(query, args) {
-			return await db.event.find({ _id : args.id })
-		},
-		async events(query, args) {
+		events(query, args) {
 			let date
-			if(args.from === "now"){
+			if(args.from === null){
 				date = new Date()
 			}else{
-				date = args.from
+				date = new Date(args.from)
 			}
-			console.log(args, date)
 
-			return await db.event.find({ when: { $gt: date } })
+			return db.event.cfind({ when: { $gt: date } }).sort({when: 1}).exec()
 
 		}
 	},
-})
+}
 
+let exec
+try {
+	exec = makeExecutableSchema({ 
+		typeDefs: shcema ,
+		resolvers: resolvers
+	})
+}catch(err){
+	console.log(err)
+}
 
+module.exports = exec
 function graphGet(obj){
 	return new Promise(function (fulfill, reject){
 		// console.log("graph get: ", obj)

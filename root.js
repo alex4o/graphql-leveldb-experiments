@@ -31,7 +31,7 @@ module.exports = {
 			let res = await graphGet({ subject: ["writer", writer._id ], predicate: "write" })
 			// console.log("article", res.map(t => t.object[1]))
 
-			out =  await db.article.find({ _id: { $in: res.map(t => t.object[1]) } })
+			out = await db.article.find({ _id: { $in: res.map(t => t.object[1]) } })
 			// console.log("articsle: ", out)
 			return out
 		}

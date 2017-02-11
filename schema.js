@@ -55,7 +55,7 @@ let shcema = `
 
 
 	interface User {
-		_id: ID!
+		id: ID!
 		name: String
 	}
 
@@ -67,13 +67,13 @@ let shcema = `
 	}
 
 	type Writer implements User {
-		_id: ID!
+		id: ID!
 		name: String
 		articles: [Article]
 	}
 
 	type Article {
-		_id: ID!
+		id: ID!
 		writer: Writer
 		image: [Image]
 		title: String
@@ -97,6 +97,7 @@ let shcema = `
 		latest: [Article]
 		events(from: Date = "now"): [Event]
 		event(id: ID): Event
+		allevents: [Event]
 	}
 
 `
@@ -129,7 +130,7 @@ let resolvers = {
 
 			// let out =  await db.article.find({ _id: { $in: res.map(t => t.object[1]) } })
 			// console.log("articsle: ", out)
-			return ctx.articleGraph.load(writer._id)
+			return ctx.articleGraph.load(writer.id)
 		}
 	},
 	Article: {
@@ -140,7 +141,7 @@ let resolvers = {
 			//console.log("article: ", article)
 
 			//let out = await db.user.find({ _id: { $in: res.map(t => t.subject[1]) } })
-			let out = ctx.userGraph.load(article._id)
+			let out = ctx.userGraph.load(article.id)
 			// console.log("writer: ", out)	
 			
 			return out
@@ -152,36 +153,62 @@ let resolvers = {
 	Query: {
 		article(query, args, ctx) {
 			// console.log("query: ", arguments)
-			return db.article.findOne({ _id: args.id })
+			// return db.article.findOne({ _id: args.id })
+			return db.article.get(parseInt(args.id))
+
 			// return await ctx.article.load(args.id)
 		},
 
-		articles(query, args, ctx) {
-			return db.article.find({})
+		async articles(query, args, ctx) {
+			let stream = await db.article.readStream()
+			
+			return ReadStream(stream)
+
 		},
 		writer(query, args) {
-			return db.user.findOne({ _id: args.id })
+			return db.user.get(parseInt(args.id))
+		
 		},
-		featured() {
-			return db.article.cfind({ featured: true }).limit(5).exec()
+		async featured() {
+			// return db.article.cfind({ featured: true }).limit(5).exec()
+			let stream = await db.article.readStream()
+			return ReadFeatured(stream, 2)
+
+
 		},
-		latest() {
-			return db.article.cfind({}).limit(5).exec()
+		async  latest() {
+			// return db.article.cfind({}).limit(5).exec()
+			let stream = await db.article.readStream({limit: 5})
+			return ReadStream(stream)
+
 
 		},
 		event(query, args) {
-			return db.event.find({ _id : args.id })
+			return db.event.get(parseInt(args.id))
+
 		},
-		events(query, args) {
+		async events(query, args) {
 			let date
 			if(args.from === null){
 				date = new Date()
+
+
 			}else{
 				date = new Date(args.from)
 			}
 
-			return db.event.cfind({ when: { $gt: date } }).sort({when: 1}).exec()
+			let stream = await db.events.readStream({ gt: date.getTime() })
 
+			
+			return ReadStream(stream)
+			// return db.event.cfind({ when: { $gt: date } }).sort({when: 1}).exec()
+
+		},
+		async allevents(){
+			let stream = await db.events.readStream()
+
+			
+			return ReadStream(stream)
 		}
 	},
 }
@@ -197,11 +224,44 @@ try {
 }
 
 module.exports = exec
+function ReadStream(stream) {
+	return new Promise(function (fulfill, reject){
+		let array = []
+		stream.on("data", data => {
+			array.push(data.value)
+			// console.log("key: ", data.key)
+		}).on("end", end => {
+			fulfill(array)
+		})
+	})
+}
+
+
+function ReadFeatured(stream, count = 5) {
+	return new Promise(function (fulfill, reject){
+		let array = []
+		// let count = 0
+		stream.on("data", data => {
+			if(data.value.featured){
+				array.push(data.value)
+
+				if(array.length == count){
+					//console.log("destroy")
+					stream.destroy()
+				}
+			}
+		}).on("end", end => {
+			fulfill(array)
+		}).on("close", end => {
+			fulfill(array)
+		})
+	})
+}
+
 function graphGet(obj){
 	return new Promise(function (fulfill, reject){
 		// console.log("graph get: ", obj)
 		graph.get(obj, (err,res) => {
-
 			if(err != null){
 				reject(err)
 			}else{

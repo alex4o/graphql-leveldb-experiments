@@ -19,17 +19,35 @@ async function f(){
 
 let a = await graphql(schema, `
 {
-	article(id: "wwsK8EHN4fnhRJfk") {
-		_id
+	article(id: 3) {
+		id
 		title
+
 		writer {
-			_id
+			id
 			name
 			articles {
-				_id
+				id
 				title
+
 			}
 		}
+	}
+
+	writer(id: 12) {
+		id
+		name
+	}
+
+	events(from: "2017-10-25T18:11:17.117Z"){
+
+		when
+		title
+	}
+
+	featured {
+
+		title
 	}
 }
 `, {}, createLoaders())

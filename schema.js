@@ -172,7 +172,7 @@ let resolvers = {
 		async featured() {
 			// return db.article.cfind({ featured: true }).limit(5).exec()
 			let stream = await db.article.readStream()
-			return ReadFeatured(stream, 2)
+			return ReadFeatured(stream, 5)
 
 
 		},

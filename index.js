@@ -2,6 +2,8 @@
 
 
 let express = require("express")
+let cors = require('cors')
+
 let app = express()
 
 let schema = require("./schema.js")
@@ -57,6 +59,7 @@ console.log(JSON.stringify(a, null, 4))
 }
 
 f()
+app.use(cors())
 
 app.post("/graphql", (req,res) => {
 	

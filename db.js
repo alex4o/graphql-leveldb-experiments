@@ -10,7 +10,6 @@ let faker = require("faker")
 
 //let nedb = require("nedb")
 let nedb = require("nedb-promise")
-
 // let db = { 
 // 	user: new nedb({filename: "./user.db", autoload: true}),
 // 	article: new nedb({filename: "./article.db", autoload: true}),
@@ -20,13 +19,14 @@ let nedb = require("nedb-promise")
 // 	graph: graph,
 // }
 
+let db = require('couchdb-promises')({
+  baseUrl: 'http://localhost:5984', // required
+  requestTimeout: 10000
+})
 
-let db = {
-	user:levelPromise(level("user.db", { valueEncoding: "json" })),
-	article: levelPromise(level("article.db", { valueEncoding: "json" })),
-	events: levelPromise(level("events.db", { valueEncoding: "json" })),
-	graph: graph
-}
+let dbName = 'testdb'
+
+
 
 // db.user.ensureIndex({fieldName: "id", unique: true})
 // db.article.ensureIndex({fieldName: "id", unique: true})
@@ -36,31 +36,45 @@ let db = {
 
 
 function randomInt (low, high) {
-    return Math.floor(Math.random() * (high - low) + low);
+    return Math.floor(Math.random() * (high - low) + low)
 }
 
+
+
 async function generate({ count }){
+	
+
+	// let wtf = {
+	// 	user: levelPromise(level("user.db", { valueEncoding: "json" })),
+	// 	article: levelPromise(level("article.db", { valueEncoding: "json" })),
+	// 	events: levelPromise(level("events.db", { valueEncoding: "json" })),
+	// 	graph: graph
+	// }	
+
+
+	// console.log("gen ", db)
 	if(count == 0) {
-		return
+		return 
 	}
 	//let count = 40
 	let verts = []
 
 	let writers = []
-	for(let i = 0; i < count; i ++){
+	for(let i = 1; i < count; i ++){
 		let user = {
 			id: i,
-			name: faker.internet.userName()
-			// articles: []
+			name: faker.internet.userName(),
+			articles: []
 		}
+		db.createDocument("artists", user, user.id)
 
-		db.user.put(user.id, user)
+		//db.user.put(user.id, user)
 		writers.push(user)
 	}
 
 
 	let articles = []
-	for(let i = 0; i < count; i ++){
+	for(let i = 1; i < count; i ++){
 		let article = {
 			id: i,
 			title: faker.lorem.sentence(),
@@ -69,13 +83,20 @@ async function generate({ count }){
 			created: faker.date.past()	
 		}
 
-		db.article.put(article.id, article)
+		//db.article.put(article.id, article)
+
+		let writer = writers[randomInt(0, count / 2)]
+
+		writer.articles.push(article.id)
+		article.writer = writer.id
+
 		articles.push(article)
-		verts.push({subject: ["writer", writers[randomInt(0, count / 2)].id ], predicate: "write", object: ["article", article.id]})
+
+		//verts.push({subject: ["writer", writer.id ], predicate: "write", object: ["article", article.id]})
 	}
 
 	let events = []
-	for(let i = 0; i < count; i ++){
+	for(let i = 1; i < count; i ++){
 
 		let event = {
 			id: i,
@@ -86,13 +107,25 @@ async function generate({ count }){
 		// console.log(event.when + "")
 
 
-		db.events.put(event.when.getTime() , event)
-
+		//db.events.put(event.when.getTime() , event)
 		events.push(event)
-		verts.push({subject: ["writer", writers[randomInt(0, count / 2)].id ], predicate: "event", object: ["event", event.id]})
+
+		let writer = writers[randomInt(0, count / 2)]
+
+		verts.push({subject: ["writer", writer.id ], predicate: "event", object: ["event", event.id]})
 
 		// verts.push([writers[randomInt(0, 50 + count / 2)]._id, event._id, "event"])
 	}
+
+	articles.forEach(article => {
+		db.createDocument("articles", article, article.id)		
+	})
+
+	events.forEach(event => {
+		db.createDocument("events", event, event.id)
+	})
+
+
 
 	// graph.put({ subject: ["Artist", 0], predicate: "created", object: ["art", 1]})
 	// graph.put({ subject: ["Writer", 1], predicate: "created", object: ["article", 0]})
@@ -105,13 +138,14 @@ async function generate({ count }){
 
 
 	verts.forEach(vert => {
-		graph.put(vert)
+	//	graph.put(vert)
 		// delete writer.articles
 	})
+
 }
 
 
 
-generate({count: 00 })
+generate({ count: 0 })
 
 module.exports = db

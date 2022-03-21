@@ -1,8 +1,12 @@
 // /et Schema = require('graph.ql')
 let {makeExecutableSchema} = require("graphql-tools")
 
+// let db = require("./db.js")
+// let {graph} = db 
 let db = require("./db.js")
-let {graph} = db 
+
+let r = require("rethinkdb")
+
 // console.log(db)
 
 let { GraphQLScalarType } = require('graphql');
@@ -55,7 +59,7 @@ let shcema = `
 
 
 	interface User {
-		id: ID!
+		_id: ID!
 		name: String
 	}
 
@@ -67,13 +71,13 @@ let shcema = `
 	}
 
 	type Writer implements User {
-		id: ID!
+		_id: ID!
 		name: String
 		articles: [Article]
 	}
 
 	type Article {
-		id: ID!
+		_id: ID!
 		writer: Writer
 		image: [Image]
 		title: String
@@ -130,18 +134,18 @@ let resolvers = {
 
 			// let out =  await db.article.find({ _id: { $in: res.map(t => t.object[1]) } })
 			// console.log("articsle: ", out)
-			return ctx.articleGraph.load(writer.id)
+			return ctx.article.loadMany(writer.articles.map(id => id.toString()))
 		}
 	},
 	Article: {
-		writer(article, args, ctx) {
+		async writer(article, args, ctx) {
 			//let res = await graphGet({ object: ["article", article._id ], predicate: "write" })
 			
 
 			//console.log("article: ", article)
 
 			//let out = await db.user.find({ _id: { $in: res.map(t => t.subject[1]) } })
-			let out = ctx.userGraph.load(article.id)
+			let out = ctx.user.load(article.writer)
 			// console.log("writer: ", out)	
 			
 			return out
@@ -151,41 +155,47 @@ let resolvers = {
 
 	},
 	Query: {
-		article(query, args, ctx) {
+		async article(query, args, ctx) {
 			// console.log("query: ", arguments)
-			// return db.article.findOne({ _id: args.id })
-			return db.article.get(parseInt(args.id))
+			// console.log("args: ", args)
 
-			// return await ctx.article.load(args.id)
+			let doc = await db.getDocument("articles", args.id)
+			// console.log(doc)
+			return doc.data
+
 		},
 
 		async articles(query, args, ctx) {
-			let stream = await db.article.readStream()
-			
-			return ReadStream(stream)
+			//let stream = await db.article.readStream()
+			let view = await db.getView("articles","js", "created", { include_docs: true })
+			return view.data.rows.map(r => r.doc)
 
 		},
-		writer(query, args) {
-			return db.user.get(parseInt(args.id))
+		async writer(query, args) {
+			let doc = await db.getDocument("artists", args.id)
+			return doc.data
 		
 		},
 		async featured() {
 			// return db.article.cfind({ featured: true }).limit(5).exec()
-			let stream = await db.article.readStream()
-			return ReadFeatured(stream, 5)
+			let view = await db.getView("articles","js", "featured", { include_docs: true, limit: 5})
+
+			// let stream = await db.article.readStream()
+			return view.data.rows.map(r => r.doc)
 
 
 		},
-		async  latest() {
+		async latest() {
 			// return db.article.cfind({}).limit(5).exec()
-			let stream = await db.article.readStream({limit: 5})
-			return ReadStream(stream)
+			let view = await db.getView("articles","js", "created", { include_docs: true, limit: 5})
+
+			// let stream = await db.article.readStream({limit: 5})
+			return view.data.rows.map(r => r.doc)
 
 
 		},
 		event(query, args) {
 			return db.event.get(parseInt(args.id))
-
 		},
 		async events(query, args) {
 			let date
@@ -197,10 +207,11 @@ let resolvers = {
 				date = new Date(args.from)
 			}
 
-			let stream = await db.events.readStream({ gt: date.getTime() })
+			let view = await db.getView("events","js", "when", { include_docs: true, startkey: date })
+			
 
 			
-			return ReadStream(stream)
+			return view.data.rows.map(r => r.doc)
 			// return db.event.cfind({ when: { $gt: date } }).sort({when: 1}).exec()
 
 		},

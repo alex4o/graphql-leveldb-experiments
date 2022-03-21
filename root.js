@@ -1,9 +1,23 @@
 let db = require("./db.js")
+
 let {graph} = db 
 
-class Article {
 
+class Article {
+	constructor() {
+		this.speed = 12
+	}
+	hello() {
+		return "world"
+	}
+
+	shit() {
+		this.hello() + this.speed;
+	}
 }
+
+let article = new Article()
+article.hello()
 
 class Writer {
 
@@ -29,8 +43,8 @@ module.exports = {
 	writer: {
 		async articles(args) {
 			let res = await graphGet({ subject: ["writer", writer._id ], predicate: "write" })
+			
 			// console.log("article", res.map(t => t.object[1]))
-
 			out = await db.article.find({ _id: { $in: res.map(t => t.object[1]) } })
 			// console.log("articsle: ", out)
 			return out
@@ -74,7 +88,7 @@ module.exports = {
 	},
 	async events(args) {
 		console.log()
-		let date
+		let date = null
 		if(args.from === "now"){
 			date = new Date()
 		}else{

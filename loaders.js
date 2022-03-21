@@ -1,12 +1,22 @@
 var DataLoader = require('dataloader')
-var db = require("./db.js")
+// var { generate } = require("./db.js")
+// let r = require("rethinkdb")
+let db = require("./db.js")
+
+
 let _ = require("lodash")
 
 const util = require('util')
 
 module.exports = function() {
+
 	let loaders =  {
-		user: new DataLoader(async (ids) => ids.map(async id => db.user.get(id)) ),
+		user: new DataLoader(async (ids) => {
+			let docs = await db.getAllDocuments("artists", {include_docs:true, keys: ids.map(id => id.toString())})
+			// console.log("DataLoader(user): ", docs.data.rows, ids)
+
+			return docs.data.rows.map(row => row.doc)
+		}),
 		userGraph: new DataLoader(async (ids) => {
 			// console.log("DataLoader(userGraph): ", ids.length)
 
@@ -32,9 +42,12 @@ module.exports = function() {
 			
 			return res
 		}),
-		article: new DataLoader(async (ids) => 
-			ids.map(async id => db.article.get(id))
-		),
+		article: new DataLoader(async (ids) => {
+			let docs = await db.getAllDocuments("articles", {include_docs:true, keys: ids.map(id => id.toString())})
+			// console.log("DataLoader(user): ", docs.data.rows, ids)
+
+			return docs.data.rows.map(row => row.doc)
+		}),
 		graphWrite: new DataLoader(async (ids) => {
 			return ids.map(id => Object.assign(id, { predicate: "write" })).map(graphGet)
 		})

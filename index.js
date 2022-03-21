@@ -6,6 +6,9 @@ let cors = require('cors')
 
 let app = express()
 
+
+// let r = require("rethinkdb")
+
 let schema = require("./schema.js")
 let { graphql } = require("graphql")
 // writers.forEach(writer => {
@@ -19,17 +22,18 @@ async function f(){
 // let a = await db.article.find({ id: 12 })
 		// console.log(schema)
 
-let a = await graphql(schema, `
+
+let t = `
 {
-	article(id: 3) {
-		id
+	article(id: "14") {
+		_id
 		title
 
 		writer {
-			id
+			_id
 			name
 			articles {
-				id
+				_id
 				title
 
 			}
@@ -37,7 +41,7 @@ let a = await graphql(schema, `
 	}
 
 	writer(id: 12) {
-		id
+		_id
 		name
 	}
 
@@ -48,11 +52,13 @@ let a = await graphql(schema, `
 	}
 
 	featured {
-
+		_id
 		title
 	}
 }
-`, {}, createLoaders())
+`
+
+let a = await graphql(schema,t, {}, createLoaders())
 
 console.log(JSON.stringify(a, null, 4))
 
@@ -76,7 +82,11 @@ app.post("/graphql", (req,res) => {
 
 })
 
-app.listen(4000)
+app.listen(4000, async function(){
+	// await r.connect({host: 'localhost', port: 28015, db: "data"})
+	// let { generate } = db
+
+})
 
 
 // graph.get({subject: ["writer", 2],  predicate: "write" }, (err,res) => {
